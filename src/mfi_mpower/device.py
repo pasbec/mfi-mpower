@@ -54,7 +54,7 @@ class MPowerDevice:
         # NOTE: Ubiquiti mFi mPower Devices with firmware 2.1.11 use OpenSSL 1.0.0g (18 Jan 2012)
         if use_ssl:
             self._ssl = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
-            self._ssl.set_ciphers("AES128-SHA")
+            self._ssl.set_ciphers("AES128-SHA:@SECLEVEL=1")
             self._ssl.load_default_certs()
             self._ssl.verify_mode = ssl.CERT_REQUIRED if verify_ssl else ssl.CERT_NONE
         else:
