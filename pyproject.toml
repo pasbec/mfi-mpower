@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mfi-mpower"
-version = "1.2.3"
+version = "1.3.0"
 description = "Asynchronous Python API for mFi mPower devices"
 readme = "README.md"
 authors = [{ name = "pasbec", email = "p.b-dev+mfi-mpower@mailbox.org" }]
@@ -31,7 +31,7 @@ platforms = ["any"]
 where = ["src"]
 
 [tool.bumpver]
-current_version = "1.2.3"
+current_version = "1.3.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message  = "Bump version {old_version} -> {new_version}"
 commit          = true
