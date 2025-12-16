@@ -102,7 +102,7 @@ class MPowerSensor(MPowerEntity):
     def __str__(self):
         """Represent this sensor as string."""
         name = f"name={self._device.name}"
-        keys = ["port", "label", "power", "current", "voltage", "powerfactor"]
+        keys = ["port", "label", "power", "current", "voltage", "powerfactor", "energy"]
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
         return f"{__class__.__name__}({name}, {vals})"
 
@@ -133,6 +133,12 @@ class MPowerSensor(MPowerEntity):
     def powerfactor(self) -> float:
         """Return the output current factor ("real power" / "apparent power") [%]."""
         return self._value("powerfactor", scale=100)
+
+    @property
+    def energy(self) -> float:
+        """Return the energy (of this month) [kWh]."""
+        # NOTE: The device returns energy in imp with 3200 imp/kWh
+        return self._value("thismonth", scale=1/3200)
 
 
 class MPowerSwitch(MPowerEntity):
