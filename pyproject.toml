@@ -82,9 +82,9 @@ combine_as_imports = true
 # > pip-sync
 
 # Versioning
-# > bump-my-version bump major
-# > bump-my-version bump minor
-# > bump-my-version bump patch
+# > bump-my-version bump major --dry-run --verbose
+# > bump-my-version bump minor --dry-run --verbose
+# > bump-my-version bump patch --dry-run --verbose
 
 # PyPI
 # > python -m build
