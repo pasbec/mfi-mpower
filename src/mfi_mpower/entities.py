@@ -107,7 +107,7 @@ class MPowerSensor(MPowerEntity):
         return f"{__class__.__name__}({name}, {vals})"
 
     def _value(self, key: str, scale: float = 1.0) -> float | None:
-        """Process sensor value with fallback to 0."""
+        """Process (scale and round) and return sensor value."""
         value = self._data.get(key)
         if value is not None:
             value *= scale
@@ -133,13 +133,14 @@ class MPowerSensor(MPowerEntity):
 
     @property
     def powerfactor(self) -> float | None:
-        """Return the output current factor ("real power" / "apparent power") [%]."""
+        """Return the output power factor ("real power" / "apparent power") [%]."""
+        # NOTE: Raw data is dimensionless factor between 0 and 1
         return self._value("powerfactor", scale=100)
 
     @property
     def energy(self) -> float | None:
         """Return the energy (of this month) [kWh]."""
-        # NOTE: The device returns energy in imp with 3200 imp/kWh
+        # NOTE: Raw data is dimensionless impulse counter with 3200 imp/kWh
         return self._value("thismonth", scale=1/3200)
 
 
