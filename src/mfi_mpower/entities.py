@@ -106,36 +106,38 @@ class MPowerSensor(MPowerEntity):
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
         return f"{__class__.__name__}({name}, {vals})"
 
-    def _value(self, key: str, scale: float = 1.0) -> float:
+    def _value(self, key: str, scale: float = 1.0) -> float | None:
         """Process sensor value with fallback to 0."""
-        value = scale * float(self._data.get(key, 0))
-        precision = self.precision.get(key, None)
-        if precision is not None:
-            return round(value, precision)
+        value = self._data.get(key)
+        if value is not None:
+            value *= scale
+            precision = self.precision.get(key, None)
+            if precision is not None:
+                value = round(value, precision)
         return value
 
     @property
-    def power(self) -> float:
+    def power(self) -> float | None:
         """Return the output power [W]."""
         return self._value("power")
 
     @property
-    def current(self) -> float:
+    def current(self) -> float | None:
         """Return the output current [A]."""
         return self._value("current")
 
     @property
-    def voltage(self) -> float:
+    def voltage(self) -> float | None:
         """Return the output voltage [V]."""
         return self._value("voltage")
 
     @property
-    def powerfactor(self) -> float:
+    def powerfactor(self) -> float | None:
         """Return the output current factor ("real power" / "apparent power") [%]."""
         return self._value("powerfactor", scale=100)
 
     @property
-    def energy(self) -> float:
+    def energy(self) -> float | None:
         """Return the energy (of this month) [kWh]."""
         # NOTE: The device returns energy in imp with 3200 imp/kWh
         return self._value("thismonth", scale=1/3200)
