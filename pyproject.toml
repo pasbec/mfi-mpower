@@ -58,18 +58,6 @@ filename = "src/mfi_mpower/__init__.py"
 search = '__version__ = "{current_version}"'
 replace = '__version__ = "{new_version}"'
 
-[tool.bumpver]
-current_version = "1.3.1"
-version_pattern = "MAJOR.MINOR.PATCH"
-commit_message  = "Bump version {old_version} -> {new_version}"
-commit          = true
-tag             = false
-push            = false
-
-[tool.bumpver.file_patterns]
-"pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
-"src/mfi_mpower/__init__.py" = ['__version__ = "{version}"']
-
 [tool.black]
 target-version = ["py39", "py310"]
 
@@ -94,9 +82,9 @@ combine_as_imports = true
 # > pip-sync
 
 # Versioning
-# > bumpver update --major --no-fetch --dry
-# > bumpver update --minor --no-fetch --dry
-# > bumpver update --patch --no-fetch --dry
+# > bump-my-version bump major
+# > bump-my-version bump minor
+# > bump-my-version bump patch
 
 # PyPI
 # > python -m build
