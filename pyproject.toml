@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mfi-mpower"
-version = "1.3.3"
+version = "1.3.4"
 description = "Asynchronous Python API for mFi mPower devices"
 readme = "README.md"
 authors = [{ name = "pasbec", email = "p.b-dev+mfi-mpower@mailbox.org" }]
@@ -31,7 +31,7 @@ platforms = ["any"]
 where = ["src"]
 
 [tool.bumpversion]
-current_version = "1.3.3"
+current_version = "1.3.4"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
