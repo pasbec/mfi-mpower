@@ -19,7 +19,7 @@ dependencies = ["aiohttp", "yarl", "asyncssh"]
 requires-python = ">=3.9"
 
 [project.optional-dependencies]
-dev = ["wheel", "bumpver", "black", "pylint", "isort", "pip-tools", "pytest", "build", "twine"]
+dev = ["black", "build", "bump-my-version", "isort", "pip-tools", "pylint", "pytest", "twine", "wheel"]
 
 [project.urls]
 Homepage = "https://github.com/pasbec/mfi"
