@@ -7,6 +7,7 @@ import ssl
 import time
 
 import aiohttp
+import asyncio
 from yarl import URL
 
 from .board import MPowerBoard
@@ -55,8 +56,8 @@ class MPowerDevice:
         if use_ssl:
             self._ssl = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
             self._ssl.set_ciphers("AES128-SHA:@SECLEVEL=1")
-            self._ssl.load_default_certs()
             self._ssl.verify_mode = ssl.CERT_REQUIRED if verify_ssl else ssl.CERT_NONE
+            self._ssl.certs_loaded = False
         else:
             self._ssl = False
 
@@ -151,11 +152,18 @@ class MPowerDevice:
                 f"Connection to device {self.name} failed: {exc}"
             ) from exc
 
+    async def load_certs(self):
+        if (self._ssl and self._ssl.verify_mode != ssl.CERT_NONE and not self._ssl.certs_loaded):
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._ssl.load_default_certs)
+            self._ssl.certs_loaded = True
+
     async def login(self) -> None:
         """Login to this device."""
         if self._session_owned and self._session is None:
             self._session = aiohttp.ClientSession()
         if not self._authenticated:
+            await self.load_certs()
             await self.request(
                 "POST",
                 "/login.cgi",
