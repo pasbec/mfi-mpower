@@ -76,17 +76,19 @@ class MPowerEntity:
         """Return the lock state which prevents switching if enabled."""
         return bool(self.data["locked"])
 
-    async def lock(self, refresh: bool = True) -> None:
-        """Lock output switch."""
-        await self.device.session.run(f"echo 1 > /proc/power/lock{self.port}")
+    async def set_lock(self, locked: bool, refresh: bool = True) -> None:
+        """Set lock state to on/off."""
+        await self.device.run(f"echo {int(locked)} > /proc/power/lock{self.port}")
         if refresh:
             await self.update()
 
+    async def lock(self, refresh: bool = True) -> None:
+        """Lock output switch."""
+        await self.set_lock(True, refresh=refresh)
+
     async def unlock(self, refresh: bool = True) -> None:
         """Unlock output switch."""
-        await self.device.session.run(f"echo 0 > /proc/power/lock{self.port}")
-        if refresh:
-            await self.update()
+        await self.set_lock(False, refresh=refresh)
 
 class MPowerSensor(MPowerEntity):
     """mFi mPower sensor representation."""
@@ -134,20 +136,19 @@ class MPowerSwitch(MPowerEntity):
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
         return f"{__class__.__name__}({name}, {vals})"
 
-    async def set(self, output: bool, refresh: bool = True) -> None:
+    async def set_output(self, output: bool, refresh: bool = True) -> None:
         """Set output to on/off."""
-        await self.device.session.run(f"echo {int(output)} > /proc/power/output{self.port}")
+        await self.device.run(f"echo {int(output)} > /proc/power/output{self.port}")
         if refresh:
             await self.update()
 
     async def turn_on(self, refresh: bool = True) -> None:
         """Turn output on."""
-        await self.set(True, refresh=refresh)
+        await self.set_output(True, refresh=refresh)
 
     async def turn_off(self, refresh: bool = True) -> None:
         """Turn output off."""
-        await self.set(False, refresh=refresh)
-
+        await self.set_output(False, refresh=refresh)
     async def toggle(self, refresh: bool = True) -> None:
         """Toggle output."""
-        await self.set(not self.output, refresh=refresh)
+        await self.set_output(not self.output, refresh=refresh)

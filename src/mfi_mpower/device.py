@@ -10,7 +10,7 @@ from .entities import MPowerSensor, MPowerSwitch
 from .exceptions import MPowerDataError
 
 
-class MPowerLED(Enum):
+class MPowerLEDStatus(Enum):
     OFF = 0
     BLUE = 1
     YELLOW = 2
@@ -74,6 +74,10 @@ class MPowerDevice:
         if self._data:
             return self._data.get("hostname", self.host)
         return self.host
+    
+    async def run(self, command: str) -> str:
+        """Run a command on the device and return the output."""
+        return await self.session.run(command)
 
     async def update(self, debug: bool = False) -> None:
         """Update sensor data."""
@@ -84,15 +88,15 @@ class MPowerDevice:
             # Update static data
             if not self._data:
                 # Read host name
-                data["hostname"] = await self.session.run("cat /proc/sys/kernel/hostname")
+                data["hostname"] = await self.run("cat /proc/sys/kernel/hostname")
 
                 # Read interface and IP address
-                iface = await self.session.run("ip route | awk '/default/ {print $5}'")
+                iface = await self.run("ip route | awk '/default/ {print $5}'")
                 data["iface"] = "lan" if iface.startswith("eth") else "wlan"
-                data["ipaddr"] = await self.session.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
+                data["ipaddr"] = await self.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
 
                 # Read hardware address
-                iface_hwaddr = await self.session.run("ifconfig -a | awk '/^[a-z]/ {iface=$1} /HWaddr/ {print iface, $NF}'")
+                iface_hwaddr = await self.run("ifconfig -a | awk '/^[a-z]/ {iface=$1} /HWaddr/ {print iface, $NF}'")
                 iface_hwaddr = {m[0]: m[1] for m in [v.split() for v in iface_hwaddr.splitlines()] if ":" in m[1]}
                 for iface, hwaddr in iface_hwaddr.items():
                     if iface.startswith("eth"):
@@ -102,14 +106,14 @@ class MPowerDevice:
 
                 # Read firmware version and build
                 data["firmware"] = {}
-                data["firmware"]["version"] = f"v{await self.session.run('cat /usr/etc/.version')}"
-                data["firmware"]["build"] = await self.session.run("cat /usr/etc/.build")
+                data["firmware"]["version"] = f"v{await self.run('cat /usr/etc/.version')}"
+                data["firmware"]["build"] = await self.run("cat /usr/etc/.build")
 
                 # Read LED status
-                data["led"] = MPowerLED(int((await self.session.run("cat /proc/led/status")).split()[0]))
+                data["led"] = MPowerLEDStatus(int((await self.run("cat /proc/led/status")).split()[0]))
 
                 # Read board data
-                board_info = await self.session.run("cat /etc/board.info")
+                board_info = await self.run("cat /etc/board.info")
                 data["board"] =dict(
                     (m.group(1), m.group(2))
                     for m in re.finditer(r"board.(\w+)=(.*)", board_info)
@@ -131,7 +135,7 @@ class MPowerDevice:
                 # "relay": {"name": "vpower_cfg", "grep": "relay", "cast": lambda x: bool(int(x))},
             }.items():
                 command = f"cat /etc/persistent/cfg/{get['name']} | grep {get['grep']} | sort"
-                values = [v.split("=")[1].strip() for v in (await self.session.run(command)).splitlines()]
+                values = [v.split("=")[1].strip() for v in (await self.run(command)).splitlines()]
                 for i, value in enumerate(values):
                     data["ports"][i][key] = get["cast"](value)
 
@@ -148,7 +152,7 @@ class MPowerDevice:
                 "voltage": {"name": "v_rms", "cast": float},  # voltage [V]
             }.items():
                 command = f"cat /proc/power/{get['name']}*"
-                values = [v.strip() for v in (await self.session.run(command)).splitlines()]
+                values = [v.strip() for v in (await self.run(command)).splitlines()]
                 for i, value in enumerate(values):
                     data["ports"][i][key] = get["cast"](value)
 
@@ -241,9 +245,17 @@ class MPowerDevice:
         return self.data["board"]["sysid"]
 
     @property
-    def led(self) -> MPowerLED:
+    def led(self) -> MPowerLEDStatus:
         """Return if the led status."""
         return self.data["led"]
+
+    async def set_led(self, led: MPowerLEDStatus, refresh: bool = True) -> None:
+        """Set LED state to on/off."""
+        if self.led == MPowerLEDStatus.LOCKED_OFF:
+            await self.run(f"echo {MPowerLEDStatus.OFF.value} > /proc/led/status")
+        await self.run(f"echo {led.value} > /proc/led/status")
+        if refresh:
+            await self.update()
 
     @property
     def ports(self) -> int:

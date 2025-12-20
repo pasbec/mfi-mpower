@@ -27,7 +27,7 @@ async def main():
 
         # Turn port 1 off and toggle it afterwards back on
         switch = await device.create_switch(1)
-        await switch.set(False)
+        await switch.turn_off()
         await asyncio.sleep(5)
         await switch.toggle()
 
