@@ -10,7 +10,7 @@ from .entities import MPowerSensor, MPowerSwitch
 from .exceptions import MPowerDataError
 
 
-class MPowerLEDStatus(Enum):
+class MPowerLED(Enum):
     OFF = 0
     BLUE = 1
     YELLOW = 2
@@ -110,7 +110,7 @@ class MPowerDevice:
                 data["firmware"]["build"] = await self.run("cat /usr/etc/.build")
 
                 # Read LED status
-                data["led"] = MPowerLEDStatus(int((await self.run("cat /proc/led/status")).split()[0]))
+                data["led"] = MPowerLED(int((await self.run("cat /proc/led/status")).split()[0]))
 
                 # Read board data
                 board_info = await self.run("cat /etc/board.info")
@@ -245,14 +245,14 @@ class MPowerDevice:
         return self.data["board"]["sysid"]
 
     @property
-    def led(self) -> MPowerLEDStatus:
+    def led(self) -> MPowerLED:
         """Return if the led status."""
         return self.data["led"]
 
-    async def set_led(self, led: MPowerLEDStatus, refresh: bool = True) -> None:
+    async def set_led(self, led: MPowerLED, refresh: bool = True) -> None:
         """Set LED state to on/off."""
-        if self.led == MPowerLEDStatus.LOCKED_OFF:
-            await self.run(f"echo {MPowerLEDStatus.OFF.value} > /proc/led/status")
+        if self.led == MPowerLED.LOCKED_OFF:
+            await self.run(f"echo {MPowerLED.OFF.value} > /proc/led/status")
         await self.run(f"echo {led.value} > /proc/led/status")
         if refresh:
             await self.update()
