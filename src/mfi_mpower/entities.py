@@ -56,7 +56,7 @@ class MPowerEntity:
     @property
     def label(self) -> str:
         """Return the entity label."""
-        label = str(self.data["label"])
+        label = self.data.get("label")
         if label:
             return label
         return f"Port {self.port}"

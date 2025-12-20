@@ -199,7 +199,7 @@ class MPowerDevice:
     @property
     def iface(self) -> str: 
         """Return the device network interface."""
-        return self.data["iface"]
+        return self.data["iface"].upper()
 
     @property
     def ipaddr(self) -> str:
