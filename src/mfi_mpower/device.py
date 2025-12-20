@@ -1,11 +1,25 @@
 """Ubiquiti mFi MPower device"""
 from __future__ import annotations
 
+from enum import Enum
+import json
 import re
 
 from .session import MPowerSession
 from .entities import MPowerSensor, MPowerSwitch
 from .exceptions import MPowerDataError
+
+
+class MPowerLED(Enum):
+    OFF = 0
+    BLUE = 1
+    YELLOW = 2
+    BOTH = 3
+    ALTERNATE = 4
+    LOCKED_OFF = 99  # <turn OFF to unlock>
+
+    def __str__(self):
+        return self.name
 
 
 class MPowerDevice:
@@ -40,12 +54,14 @@ class MPowerDevice:
         if self._data:
             keys = [
                 "name",
-                "ipaddr",
-                "iface",
-                "hwaddr",
                 "model",
                 "ports",
-                "fwversion",
+                "hw_version",
+                "sw_version",
+                "hwaddr",
+                "ipaddr",
+                "iface",
+                "led",
             ]
         else:
             keys = ["host"]
@@ -59,7 +75,7 @@ class MPowerDevice:
             return self._data.get("hostname", self.host)
         return self.host
 
-    async def update(self) -> None:
+    async def update(self, debug: bool = False) -> None:
         """Update sensor data."""
         # Initialize data
         data = {}
@@ -72,8 +88,8 @@ class MPowerDevice:
 
                 # Read interface and IP address
                 iface = await self.session.run("ip route | awk '/default/ {print $5}'")
-                data["ipaddr"] = await self.session.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
                 data["iface"] = "lan" if iface.startswith("eth") else "wlan"
+                data["ipaddr"] = await self.session.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
 
                 # Read hardware address
                 iface_hwaddr = await self.session.run("ifconfig -a | awk '/^[a-z]/ {iface=$1} /HWaddr/ {print iface, $NF}'")
@@ -85,8 +101,12 @@ class MPowerDevice:
                         data.setdefault("hwaddr", {})["wlan"] = hwaddr
 
                 # Read firmware version and build
-                data["fwversion"] = f"v{await self.session.run('cat /usr/etc/.version')}"
-                data["fwbuild"] = await self.session.run("cat /usr/etc/.build")
+                data["firmware"] = {}
+                data["firmware"]["version"] = f"v{await self.session.run('cat /usr/etc/.version')}"
+                data["firmware"]["build"] = await self.session.run("cat /usr/etc/.build")
+
+                # Read LED status
+                data["led"] = MPowerLED(int((await self.session.run("cat /proc/led/status")).split()[0]))
 
                 # Read board data
                 board_info = await self.session.run("cat /etc/board.info")
@@ -136,6 +156,9 @@ class MPowerDevice:
             raise MPowerDataError(
                 f"Data from device {self.session.host} is not valid: {type(exc).__name__}({exc})"
             ) from exc
+        
+        if debug:
+            print(json.dumps(data, indent=2, default=str))
 
         # Update data
         self._data.update(data)
@@ -182,28 +205,15 @@ class MPowerDevice:
         return self.data["hwaddr"]["wlan"]
 
     @property
-    def fwversion(self) -> str:
-        """Return the device host firmware version."""
-        return self.data["fwversion"]
+    def sw_version(self) -> str:
+        """Return the device firmware version."""
+        version = self.data["firmware"]["version"]
+        build = self.data["firmware"]["build"]
+        return f"{version} (build {build})"
 
     @property
-    def fwbuild(self) -> str:
-        """Return the device host firmware version."""
-        return self.data["fwbuild"]
-
-    @property
-    def sysid(self) -> str:
-        """Return if the board id."""
-        return self.data["board"]["sysid"]
-
-    @property
-    def cpurevision(self) -> str:
-        """Return if the board CPU revision."""
-        return self.data["board"]["cpurevision"]
-
-    @property
-    def revision(self) -> str:
-        """Return if the board revision."""
+    def hw_version(self) -> str:
+        """Return the device hardware revision."""
         return self.data["board"]["revision"]
 
     @property
@@ -218,12 +228,22 @@ class MPowerDevice:
 
     @property
     def model(self) -> str:
-        """Return if the board model."""
+        """Return if the model."""
         name = self.data["board"]["name"]
         eu_tag = " (EU)" if self.eu_model else ""
         if name:
             return name + eu_tag
         return ""
+
+    @property
+    def model_id(self) -> str:
+        """Return if the model id."""
+        return self.data["board"]["sysid"]
+
+    @property
+    def led(self) -> MPowerLED:
+        """Return if the led status."""
+        return self.data["led"]
 
     @property
     def ports(self) -> int:
