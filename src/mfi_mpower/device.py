@@ -120,7 +120,7 @@ class MPowerDevice:
                 "current": {"name": "i_rms", "cast": float},  # current [A]
                 "enabled": {"name": "enabled", "cast": lambda x: bool(int(x))},  # enabled state
                 "energy": {"name": "energy_sum", "cast": float},  # energy [Wh]
-                "locked": {"name": "output", "cast": lambda x: bool(int(x))},  # lock state
+                "locked": {"name": "lock", "cast": lambda x: bool(int(x))},  # lock state
                 "output": {"name": "output", "cast": lambda x: bool(int(x))},  # output state
                 "power": {"name": "active_pwr", "cast": float},  # power [W]
                 "powerfactor": {"name": "pf", "cast": float},  # power factor
