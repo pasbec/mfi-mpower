@@ -6,4 +6,4 @@ from .session import MPowerConnectionError, MPowerAuthenticationError, MPowerCom
 from .device import MPowerDevice
 from .entities import MPowerSensor, MPowerSwitch
 
-__version__ = "2.1.3"
+__version__ = "2.2.0"
