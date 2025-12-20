@@ -140,7 +140,6 @@ class MPowerDevice:
                 command = f"cat /etc/persistent/cfg/{get['name']}"
                 lines = [line for line in sorted((await self.run(command)).splitlines())]
                 values = [line.split("=")[1].strip() for line in lines if get['grep'] in line]
-                print(values)
                 for i, value in enumerate(values):
                     data["ports"][i][key] = get["cast"](value)
 
