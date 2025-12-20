@@ -71,8 +71,18 @@ class MPowerDevice:
                 data["hostname"] = await self.session.run("cat /proc/sys/kernel/hostname")
 
                 # Read interface and IP address
-                data["iface"] = await self.session.run("ip route | awk '/default/ {print $5}'")
-                data["ipaddr"] = await self.session.run(f"ifconfig {data['iface']} | awk '/inet / {{print $2}}' | cut -d: -f2")
+                iface = await self.session.run("ip route | awk '/default/ {print $5}'")
+                data["ipaddr"] = await self.session.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
+                data["iface"] = "lan" if iface.startswith("eth") else "wlan"
+
+                # Read hardware address
+                iface_hwaddr = await self.session.run("ifconfig -a | awk '/^[a-z]/ {iface=$1} /HWaddr/ {print iface, $NF}'")
+                iface_hwaddr = {m[0]: m[1] for m in [v.split() for v in iface_hwaddr.splitlines()] if ":" in m[1]}
+                for iface, hwaddr in iface_hwaddr.items():
+                    if iface.startswith("eth"):
+                        data.setdefault("hwaddr", {})["lan"] = hwaddr
+                    else:
+                        data.setdefault("hwaddr", {})["wlan"] = hwaddr
 
                 # Read firmware version and build
                 data["fwversion"] = f"v{await self.session.run('cat /usr/etc/.version')}"
@@ -156,15 +166,20 @@ class MPowerDevice:
     
     @property
     def iface(self) -> str: 
-        """Return the device network interface type."""
-        if self.data["iface"].startswith("eth"):
-            return "wired"
-        return "wireless"
+        """Return the device network interface."""
+        return self.data["iface"]
 
     @property
     def ipaddr(self) -> str:
         """Return the device IP address."""
         return self.data["ipaddr"]
+
+    @property
+    def hwaddr(self) -> str:
+        """Return the device hardware address from LAN if connected, else from WLAN."""
+        if self.iface == "lan":
+            return self.data["hwaddr"]["lan"]
+        return self.data["hwaddr"]["wlan"]
 
     @property
     def fwversion(self) -> str:
@@ -190,11 +205,6 @@ class MPowerDevice:
     def revision(self) -> str:
         """Return if the board revision."""
         return self.data["board"]["revision"]
-
-    @property
-    def hwaddr(self) -> str:
-        """Return if the board hardware address."""
-        return self.data["board"]["hwaddr"]
 
     @property
     def eu_model(self) -> bool | None:
@@ -237,8 +247,8 @@ class MPowerDevice:
 
     @property
     def unique_id(self) -> str:
-        """Return a unique device id from board hardware address."""
-        return self.hwaddr
+        """Return a unique device id from combined LAN/WLAN hardware addresses."""
+        return f"{self.data['hwaddr']['lan']}-{self.data['hwaddr']['wlan']}"
 
     async def create_sensor(self, port: int) -> MPowerSensor:
         """Create a single sensor."""
