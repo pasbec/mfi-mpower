@@ -85,17 +85,9 @@ class MPowerDevice:
         data = {}
             
         try:
-            # Update static data
+            # Update static data initially
             if not self._data:
-                # Read host name
-                data["hostname"] = await self.run("cat /proc/sys/kernel/hostname")
-
-                # Read interface and IP address
-                iface = await self.run("ip route | awk '/default/ {print $5}'")
-                data["iface"] = "lan" if iface.startswith("eth") else "wlan"
-                data["ipaddr"] = await self.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
-
-                # Read hardware address
+                # Read hardware addresses
                 iface_hwaddr = await self.run("ifconfig -a | awk '/^[a-z]/ {iface=$1} /HWaddr/ {print iface, $NF}'")
                 iface_hwaddr = {m[0]: m[1] for m in [v.split() for v in iface_hwaddr.splitlines()] if ":" in m[1]}
                 for iface, hwaddr in iface_hwaddr.items():
@@ -104,15 +96,7 @@ class MPowerDevice:
                     else:
                         data.setdefault("hwaddr", {})["wlan"] = hwaddr
 
-                # Read firmware version and build
-                data["firmware"] = {}
-                data["firmware"]["version"] = f"v{await self.run('cat /usr/etc/.version')}"
-                data["firmware"]["build"] = await self.run("cat /usr/etc/.build")
-
-                # Read LED status
-                data["led"] = MPowerLED(int((await self.run("cat /proc/led/status")).split()[0]))
-
-                # Read board data
+                # Read board info
                 board_info = await self.run("cat /etc/board.info")
                 data["board"] =dict(
                     (m.group(1), m.group(2))
@@ -123,6 +107,22 @@ class MPowerDevice:
                 ports = int(data["board"]["shortname"][1])
             else:
                 ports = self.ports
+
+            # Read firmware version and build
+            data["firmware"] = {}
+            data["firmware"]["version"] = f"v{await self.run('cat /usr/etc/.version')}"
+            data["firmware"]["build"] = await self.run("cat /usr/etc/.build")
+
+            # Read host name
+            data["hostname"] = await self.run("cat /proc/sys/kernel/hostname")
+
+            # Read interface and IP address
+            iface = await self.run("ip route | awk '/default/ {print $5}'")
+            data["iface"] = "lan" if iface.startswith("eth") else "wlan"
+            data["ipaddr"] = await self.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
+
+            # Read LED status
+            data["led"] = MPowerLED(int((await self.run("cat /proc/led/status")).split()[0]))
 
             # Initialize port data
             data["ports"] = [{"port": i+1} for i in range(ports)]
