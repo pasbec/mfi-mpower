@@ -76,6 +76,16 @@ class MPowerEntity:
         """Return the lock state which prevents switching if enabled."""
         return bool(self.data["locked"])
 
+    async def lock(self) -> None:
+        """Lock output switch."""
+        await self.device.session.run(f"echo 1 > /proc/power/lock{self.port}")
+        await self.update()
+
+    async def unlock(self) -> None:
+        """Unlock output switch."""
+        await self.device.session.run(f"echo 0 > /proc/power/lock{self.port}")
+        await self.update()
+
 class MPowerSensor(MPowerEntity):
     """mFi mPower sensor representation."""
 
@@ -121,16 +131,6 @@ class MPowerSwitch(MPowerEntity):
         keys = ["port", "label", "output", "relay", "locked"]
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
         return f"{__class__.__name__}({name}, {vals})"
-
-    async def lock(self) -> None:
-        """Lock output switch."""
-        await self.device.session.run(f"echo 1 > /proc/power/lock{self.port}")
-        await self.update()
-
-    async def unlock(self) -> None:
-        """Unlock output switch."""
-        await self.device.session.run(f"echo 0 > /proc/power/lock{self.port}")
-        await self.update()
 
     async def set(self, output: bool, refresh: bool = True) -> None:
         """Set output to on/off."""
