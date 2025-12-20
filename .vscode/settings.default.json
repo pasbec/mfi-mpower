@@ -14,8 +14,6 @@
     "bumpversion",
     "cpurevision",
     "diffie",
-    "fwbuild",
-    "fwversion",
     "hwaddr",
     "isort",
     "mpower",
@@ -25,13 +23,11 @@
     "pyproject",
     "pytest",
     "setuptools",
-    "thismonth",
-    "ubiquiti",
-    "vpower",
-    "yarl"
+    "vpower"
   ],
   "cSpell.words": [
     "Dropbear",
+    "Ubiquiti",
     "WLAN"
   ]
 }

@@ -232,7 +232,7 @@ class MPowerDevice:
         name = self.data["board"]["name"]
         eu_tag = " (EU)" if self.eu_model else ""
         if name:
-            return name + eu_tag
+            return f"mFi {name}{eu_tag}"
         return ""
 
     @property
