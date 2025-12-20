@@ -54,12 +54,9 @@ class MPowerEntity:
         return f"{self.device.unique_id}-{self.port}"
 
     @property
-    def label(self) -> str:
+    def label(self) -> str | None:
         """Return the entity label."""
-        label = self.data.get("label")
-        if label:
-            return label
-        return f"Port {self.port}"
+        return self.data.get("label")
 
     @property
     def output(self) -> bool:
