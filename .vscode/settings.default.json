@@ -8,12 +8,30 @@
   "python.linting.pylintEnabled": true,
   "python.linting.enabled": true,
   "cSpell.ignoreWords": [
+    "algs",
+    "asyncssh",
     "bumpver",
     "bumpversion",
+    "cpurevision",
+    "diffie",
+    "fwbuild",
+    "fwversion",
+    "hwaddr",
     "isort",
     "mpower",
+    "pasbec",
     "powerfactor",
+    "pylint",
     "pyproject",
-    "thismonth"
+    "pytest",
+    "setuptools",
+    "thismonth",
+    "ubiquiti",
+    "vpower",
+    "yarl"
+  ],
+  "cSpell.words": [
+    "Dropbear",
+    "WLAN"
   ]
 }

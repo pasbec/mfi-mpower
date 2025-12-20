@@ -1,24 +1,11 @@
 """Ubiquiti mFi MPower device"""
 from __future__ import annotations
 
-import json
-from random import randrange
-import ssl
-import time
+import re
 
-import aiohttp
-import asyncio
-from yarl import URL
-
-from .board import MPowerBoard
+from .session import MPowerSession
 from .entities import MPowerSensor, MPowerSwitch
-from .exceptions import (
-    MPowerAPIError,
-    MPowerAPIConnError,
-    MPowerAPIAuthError,
-    MPowerAPIReadError,
-    MPowerAPIDataError,
-)
+from .exceptions import MPowerDataError
 
 
 class MPowerDevice:
@@ -29,60 +16,37 @@ class MPowerDevice:
         host: str,
         username: str,
         password: str,
-        use_ssl: bool = False,
-        verify_ssl: bool = False,
-        cache_time: float = 0.0,
-        board_info: bool | None = None,
-        session: aiohttp.ClientSession | None = None,
     ) -> None:
         """Initialize the device."""
         self.host = host
-        self.url = URL(f"https://{host}" if use_ssl else f"http://{host}")
         self.username = username
         self.password = password
-        self.cache_time = cache_time
-        self._board_info = board_info
+        self.session = MPowerSession(host, username, password)
 
-        self._board = MPowerBoard(self)
-
-        if session is None:
-            self._session_owned = True
-            self._session = None
-        else:
-            self._session_owned = False
-            self._session = session
-
-        # NOTE: Ubiquiti mFi mPower Devices with firmware 2.1.11 use OpenSSL 1.0.0g (18 Jan 2012)
-        if use_ssl:
-            self._ssl = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
-            self._ssl.set_ciphers("AES128-SHA:@SECLEVEL=0")
-            self._ssl.verify_mode = ssl.CERT_REQUIRED if verify_ssl else ssl.CERT_NONE
-            self._ssl.certs_loaded = False
-        else:
-            self._ssl = False
-
-        self._cookie = (
-            f"AIROS_SESSIONID={''.join([str(randrange(9)) for i in range(32)])}"
-        )
-
-        self._authenticated = False
-        self._time = time.time()
         self._data = {}
 
     async def __aenter__(self) -> MPowerDevice:
         """Enter context manager scope."""
-        await self.login()
+        await self.session.connect()
         await self.update()
         return self
 
     async def __aexit__(self, *kwargs) -> None:
         """Leave context manager scope."""
-        await self.logout()
+        await self.session.close()
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Represent this device as string."""
         if self._data:
-            keys = ["name", "ipaddr", "hwaddr", "model"]
+            keys = [
+                "name",
+                "ipaddr",
+                "iface",
+                "hwaddr",
+                "model",
+                "ports",
+                "fwversion",
+            ]
         else:
             keys = ["host"]
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
@@ -91,134 +55,80 @@ class MPowerDevice:
     @property
     def name(self) -> str:
         """Return the device name."""
-        if self.updated:
-            try:
-                return self.hostname
-            except Exception:  # pylint: disable=broad-except
-                pass
+        if self._data:
+            return self._data.get("hostname", self.host)
         return self.host
-
-    @property
-    def manufacturer(self) -> str:
-        """Return the device manufacturer."""
-        return "Ubiquiti"
-
-    @property
-    def board(self) -> MPowerBoard:
-        """Return the device board."""
-        return self._board
-
-    @property
-    def eu_model(self) -> bool | None:
-        """Return whether this device is a EU model with type F sockets."""
-        if self._board.updated:
-            return self._board.eu_model
-        return None
-
-    async def request(
-        self, method: str, url: str | URL, data: dict | None = None
-    ) -> str:
-        """Session wrapper for general requests."""
-        url = URL(url)
-        if not url.is_absolute():
-            url = self.url / str(url).lstrip("/")
-        try:
-            async with self._session.request(
-                method=method,
-                url=url,
-                headers={"Cookie": self._cookie},
-                data=data,
-                ssl=self._ssl,
-                chunked=None,
-            ) as resp:
-                if resp.status != 200:
-                    raise MPowerAPIReadError(
-                        f"Received bad HTTP status code from device {self.name}: {resp.status}"
-                    )
-
-                # NOTE: Un-authorized request will redirect to /login.cgi
-                if str(resp.url.path) == "/login.cgi":
-                    self._authenticated = False
-                else:
-                    self._authenticated = True
-
-                return await resp.text()
-        except aiohttp.ClientSSLError as exc:
-            raise MPowerAPIConnError(
-                f"Could not verify SSL certificate of device {self.name}: {exc}"
-            ) from exc
-        except aiohttp.ClientError as exc:
-            raise MPowerAPIConnError(
-                f"Connection to device {self.name} failed: {exc}"
-            ) from exc
-
-    async def load_certs(self):
-        if (self._ssl and self._ssl.verify_mode != ssl.CERT_NONE and not self._ssl.certs_loaded):
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._ssl.load_default_certs)
-            self._ssl.certs_loaded = True
-
-    async def login(self) -> None:
-        """Login to this device."""
-        if self._session_owned and self._session is None:
-            self._session = aiohttp.ClientSession()
-        if not self._authenticated:
-            await self.load_certs()
-            await self.request(
-                "POST",
-                "/login.cgi",
-                data={"username": self.username, "password": self.password},
-            )
-
-            if not self._authenticated:
-                raise MPowerAPIAuthError(
-                    f"Login to device {self.name} failed due to wrong API credentials"
-                )
-
-    async def logout(self) -> None:
-        """Logout from this device."""
-        if self._authenticated:
-            await self.request("POST", "/logout.cgi")
-        if self._session_owned:
-            await self._session.close()
-            self._session = None
 
     async def update(self) -> None:
         """Update sensor data."""
-        # NOTE: If board_info is
-        #        - True, one attempt will be made (raise)
-        #        - None, one attempt will be made (no raise)
-        #        - False, no attempt will be made
-        #       to update the board data!
-        if not self._board.updated and self._board_info is not False:
-            try:
-                self._board = MPowerBoard(self)
-                await self._board.update()
-            except Exception as exc:  # pylint: disable=broad-except
-                if self._board_info:
-                    raise exc
+        # Initialize data
+        data = {}
+            
+        try:
+            # Update static data
+            if not self._data:
+                # Read host name
+                data["hostname"] = await self.session.run("cat /proc/sys/kernel/hostname")
 
-        if not self._data or (time.time() - self._time) > self.cache_time:
-            await self.login()
-            text_status = await self.request("GET", "/status.cgi")
-            text_sensors = await self.request("GET", "/mfi/sensors.cgi")
+                # Read interface and IP address
+                data["iface"] = await self.session.run("ip route | awk '/default/ {print $5}'")
+                data["ipaddr"] = await self.session.run(f"ifconfig {data['iface']} | awk '/inet / {{print $2}}' | cut -d: -f2")
 
-            try:
-                data = json.loads(text_status)
-                data.update(json.loads(text_sensors))
-            except aiohttp.ContentTypeError as exc:
-                raise MPowerAPIDataError(
-                    f"Received invalid data from device {self.name}: {exc}"
-                ) from exc
+                # Read firmware version and build
+                data["fwversion"] = f"v{await self.session.run('cat /usr/etc/.version')}"
+                data["fwbuild"] = await self.session.run("cat /usr/etc/.build")
 
-            status = data.get("status", None)
-            if status != "success":
-                raise MPowerAPIDataError(
-                    f"Received invalid sensor update status from device {self.name}: {status}"
+                # Read board data
+                board_info = await self.session.run("cat /etc/board.info")
+                data["board"] =dict(
+                    (m.group(1), m.group(2))
+                    for m in re.finditer(r"board.(\w+)=(.*)", board_info)
                 )
 
-            self._time = time.time()
-            self._data = data
+                # Determine number of ports
+                ports = int(data["board"]["shortname"][1])
+            else:
+                ports = self.ports
+
+            # Initialize port data
+            data["ports"] = [{"port": i+1} for i in range(ports)]
+
+            # Read port config
+            for key, get in {
+                "label": {"name": "config_file", "grep": "label", "cast": str},
+                # "enabled": {"name": "vpower_cfg", "grep": "enabled", "cast": lambda x: bool(int(x))},
+                # "lock": {"name": "vpower_cfg", "grep": "lock", "cast": lambda x: bool(int(x))},
+                # "relay": {"name": "vpower_cfg", "grep": "relay", "cast": lambda x: bool(int(x))},
+            }.items():
+                command = f"cat /etc/persistent/cfg/{get['name']} | grep {get['grep']} | sort"
+                values = [v.split("=")[1].strip() for v in (await self.session.run(command)).splitlines()]
+                for i, value in enumerate(values):
+                    data["ports"][i][key] = get["cast"](value)
+
+            # Read port sensor data
+            for key, get in {
+                "current": {"name": "i_rms", "cast": float},  # current [A]
+                "enabled": {"name": "enabled", "cast": lambda x: bool(int(x))},  # enabled state
+                "energy": {"name": "energy_sum", "cast": float},  # energy [Wh]
+                "locked": {"name": "output", "cast": lambda x: bool(int(x))},  # lock state
+                "output": {"name": "output", "cast": lambda x: bool(int(x))},  # output state
+                "power": {"name": "active_pwr", "cast": float},  # power [W]
+                "powerfactor": {"name": "pf", "cast": float},  # power factor
+                "relay": {"name": "relay", "cast": lambda x: bool(int(x))},  # relay state
+                "voltage": {"name": "v_rms", "cast": float},  # voltage [V]
+            }.items():
+                command = f"cat /proc/power/{get['name']}*"
+                values = [v.strip() for v in (await self.session.run(command)).splitlines()]
+                for i, value in enumerate(values):
+                    data["ports"][i][key] = get["cast"](value)
+
+        except Exception as exc:
+            raise MPowerDataError(
+                f"Data from device {self.session.host} is not valid: {type(exc).__name__}({exc})"
+            ) from exc
+
+        # Update data
+        self._data.update(data)
 
     @property
     def updated(self) -> bool:
@@ -229,91 +139,87 @@ class MPowerDevice:
     def data(self) -> dict:
         """Return device data."""
         if not self._data:
-            raise MPowerAPIError(
+            raise MPowerDataError(
                 f"Device data for device {self.name} must be updated first"
             )
         return self._data
 
-    @data.setter
-    def data(self, data: dict) -> None:
-        """Set device data."""
-        self._data = data
-
     @property
-    def host_data(self) -> dict:
-        """Return the device host data."""
-        return self.data.get("host", {})
-
-    @property
-    def fwversion(self) -> str:
-        """Return the device host firmware version."""
-        return self.host_data.get("fwversion", "")
+    def manufacturer(self) -> str:
+        """Return the device manufacturer."""
+        return "Ubiquiti"
 
     @property
     def hostname(self) -> str:
         """Return the device host name."""
-        return self.host_data.get("hostname", "")
-
+        return self.data["hostname"]
+    
     @property
-    def lan_data(self) -> dict:
-        """Return the device LAN data."""
-        return self.data.get("lan", {})
-
-    @property
-    def wlan_data(self) -> dict:
-        """Return the device WLAN data."""
-        return self.data.get("wlan", {})
+    def iface(self) -> str: 
+        """Return the device network interface type."""
+        if self.data["iface"].startswith("eth"):
+            return "wired"
+        return "wireless"
 
     @property
     def ipaddr(self) -> str:
-        """Return the device IP address from LAN if connected, else from WLAN."""
-        lan_connected = self.lan_data.get("status", "") != "Unplugged"
-        if lan_connected:
-            return self.lan_data.get("ip", "")
-        return self.wlan_data.get("ip", "")
+        """Return the device IP address."""
+        return self.data["ipaddr"]
+
+    @property
+    def fwversion(self) -> str:
+        """Return the device host firmware version."""
+        return self.data["fwversion"]
+
+    @property
+    def fwbuild(self) -> str:
+        """Return the device host firmware version."""
+        return self.data["fwbuild"]
+
+    @property
+    def sysid(self) -> str:
+        """Return if the board id."""
+        return self.data["board"]["sysid"]
+
+    @property
+    def cpurevision(self) -> str:
+        """Return if the board CPU revision."""
+        return self.data["board"]["cpurevision"]
+
+    @property
+    def revision(self) -> str:
+        """Return if the board revision."""
+        return self.data["board"]["revision"]
 
     @property
     def hwaddr(self) -> str:
-        """Return the device hardware address from LAN if connected, else from WLAN."""
-        lan_connected = self.lan_data.get("status", "") != "Unplugged"
-        if lan_connected:
-            return self.lan_data.get("hwaddr", "")
-        return self.wlan_data.get("hwaddr", "")
+        """Return if the board hardware address."""
+        return self.data["board"]["hwaddr"]
 
     @property
-    def unique_id(self) -> str:
-        """Return a unique device id from combined LAN/WLAN hardware addresses."""
-        lan_hwaddr = self.lan_data.get("hwaddr", "")
-        wlan_hwaddr = self.wlan_data.get("hwaddr", "")
-        if lan_hwaddr and wlan_hwaddr:
-            return f"{lan_hwaddr}-{wlan_hwaddr}"
-        return ""
-
-    @property
-    def port_data(self) -> list[dict]:
-        """Return the device port data."""
-        return self.data.get("sensors", [])
-
-    @property
-    def ports(self) -> int:
-        """Return the number of available device ports."""
-        return len(self.port_data)
+    def eu_model(self) -> bool | None:
+        """Return whether this device is a EU model with type F sockets."""
+        shortname = self.data["board"]["shortname"]
+        if len(shortname) > 2 and shortname.endswith("E"):
+            return True
+        elif len(shortname) > 1:
+            return False
+        return None
 
     @property
     def model(self) -> str:
-        """Return the model name of this device as string."""
-        if self._board.updated:
-            return self._board.model
-        ports = self.ports
-        prefix = "mPower"
-        suffix = " (EU)" if self.eu_model else ""
-        if ports == 1:
-            return f"{prefix} mini" + suffix
-        if ports == 3:
-            return prefix + suffix
-        if ports in [6, 8]:
-            return f"{prefix} Pro" + suffix
-        return "Unknown"
+        """Return if the board model."""
+        name = self.data["board"]["name"]
+        eu_tag = " (EU)" if self.eu_model else ""
+        if name:
+            return name + eu_tag
+        return ""
+
+    @property
+    def ports(self) -> int:
+        """Return the number of available ports for the board device."""
+        shortname = self.data["board"]["shortname"]
+        return int(shortname[1])
 
     @property
     def description(self) -> str:
@@ -328,6 +234,11 @@ class MPowerDevice:
         if ports == 8:
             return "8-Port mFi Power Strip with Ethernet and Wi-Fi"
         return ""
+
+    @property
+    def unique_id(self) -> str:
+        """Return a unique device id from board hardware address."""
+        return self.hwaddr
 
     async def create_sensor(self, port: int) -> MPowerSensor:
         """Create a single sensor."""
