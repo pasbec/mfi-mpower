@@ -137,8 +137,10 @@ class MPowerDevice:
                 # "locked": {"name": "vpower_cfg", "grep": "lock", "cast": lambda x: bool(int(x))},
                 # "relay": {"name": "vpower_cfg", "grep": "relay", "cast": lambda x: bool(int(x))},
             }.items():
-                command = f"cat /etc/persistent/cfg/{get['name']} | grep {get['grep']} | sort"
-                values = [v.split("=")[1].strip() for v in (await self.run(command)).splitlines()]
+                command = f"cat /etc/persistent/cfg/{get['name']}"
+                lines = [line for line in sorted((await self.run(command)).splitlines())]
+                values = [line.split("=")[1].strip() for line in lines if get['grep'] in line]
+                print(values)
                 for i, value in enumerate(values):
                     data["ports"][i][key] = get["cast"](value)
 
@@ -155,7 +157,8 @@ class MPowerDevice:
                 "relay": {"name": "relay", "cast": lambda x: bool(int(x))},  # relay state
             }.items():
                 command = f"cat /proc/power/{get['name']}*"
-                values = [v.strip() for v in (await self.run(command)).splitlines()]
+                lines = [line for line in (await self.run(command)).splitlines()]
+                values = [line.strip() for line in lines]
                 for i, value in enumerate(values):
                     data["ports"][i][key] = get["cast"](value)
 
