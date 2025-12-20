@@ -88,8 +88,9 @@ class MPowerDevice:
             # Update static data initially
             if not self._data:
                 # Read hardware addresses
-                iface_hwaddr = await self.run("ifconfig -a | awk '/^[a-z]/ {iface=$1} /HWaddr/ {print iface, $NF}'")
-                iface_hwaddr = {m[0]: m[1] for m in [v.split() for v in iface_hwaddr.splitlines()] if ":" in m[1]}
+                ifconfig = await self.run("ifconfig -a")
+                iface_hwaddr = re.findall(r'^([a-zA-Z0-9]+).*?HWaddr ([0-9A-Fa-f:]{17})', ifconfig, re.MULTILINE)
+                iface_hwaddr = {m[0]: m[1] for m in iface_hwaddr}
                 for iface, hwaddr in iface_hwaddr.items():
                     if iface.startswith("eth"):
                         data.setdefault("hwaddr", {})["lan"] = hwaddr
@@ -117,9 +118,11 @@ class MPowerDevice:
             data["hostname"] = await self.run("cat /proc/sys/kernel/hostname")
 
             # Read interface and IP address
-            iface = await self.run("ip route | awk '/default/ {print $5}'")
+            ip_route = await self.run("ip route")
+            iface = re.search(r"^default.* dev (\S+)", ip_route, re.MULTILINE).group(1)
             data["iface"] = "lan" if iface.startswith("eth") else "wlan"
-            data["ipaddr"] = await self.run(f"ifconfig {iface} | awk '/inet / {{print $2}}' | cut -d: -f2")
+            ifconfig_iface = await self.run(f"ifconfig {iface}")
+            data["ipaddr"] = re.search(r"inet (?:addr:)?(\d+\.\d+\.\d+\.\d+)", ifconfig_iface).group(1)
 
             # Read LED status
             data["led"] = MPowerLED(int((await self.run("cat /proc/led/status")).split()[0]))
@@ -131,7 +134,7 @@ class MPowerDevice:
             for key, get in {
                 "label": {"name": "config_file", "grep": "label", "cast": str},
                 # "enabled": {"name": "vpower_cfg", "grep": "enabled", "cast": lambda x: bool(int(x))},
-                # "lock": {"name": "vpower_cfg", "grep": "lock", "cast": lambda x: bool(int(x))},
+                # "locked": {"name": "vpower_cfg", "grep": "lock", "cast": lambda x: bool(int(x))},
                 # "relay": {"name": "vpower_cfg", "grep": "relay", "cast": lambda x: bool(int(x))},
             }.items():
                 command = f"cat /etc/persistent/cfg/{get['name']} | grep {get['grep']} | sort"
@@ -141,15 +144,15 @@ class MPowerDevice:
 
             # Read port sensor data
             for key, get in {
-                "current": {"name": "i_rms", "cast": float},  # current [A]
-                "enabled": {"name": "enabled", "cast": lambda x: bool(int(x))},  # enabled state
                 "energy": {"name": "energy_sum", "cast": float},  # energy [Wh]
-                "locked": {"name": "lock", "cast": lambda x: bool(int(x))},  # lock state
-                "output": {"name": "output", "cast": lambda x: bool(int(x))},  # output state
+                "voltage": {"name": "v_rms", "cast": float},  # voltage [V]
+                "current": {"name": "i_rms", "cast": float},  # current [A]
                 "power": {"name": "active_pwr", "cast": float},  # power [W]
                 "powerfactor": {"name": "pf", "cast": float},  # power factor
+                "output": {"name": "output", "cast": lambda x: bool(int(x))},  # output state
+                "enabled": {"name": "enabled", "cast": lambda x: bool(int(x))},  # enabled state
+                "locked": {"name": "lock", "cast": lambda x: bool(int(x))},  # lock state
                 "relay": {"name": "relay", "cast": lambda x: bool(int(x))},  # relay state
-                "voltage": {"name": "v_rms", "cast": float},  # voltage [V]
             }.items():
                 command = f"cat /proc/power/{get['name']}*"
                 values = [v.strip() for v in (await self.run(command)).splitlines()]
