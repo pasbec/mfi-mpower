@@ -126,12 +126,12 @@ class MPowerDevice:
 
     @property
     def hwaddr(self) -> str:
-        """Return the hardware address for the active network interface."""
-        return self.board_data["hwaddrs"][self.iface.name.lower()]
+        """Return the hardware address from the board."""
+        return self.board_data["hwaddr"]
 
     @property
     def hwaddrs(self) -> list[str]:
-        """Return all hardware addresses."""
+        """Return hardware addresses from network interfaces."""
         return self.board_data["hwaddrs"]
 
     @property
