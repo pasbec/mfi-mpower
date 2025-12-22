@@ -51,6 +51,11 @@ class MPowerDevice:
         return f"{__class__.__name__}({vals})"
 
     @property
+    def host(self) -> str:
+        """Return the device host."""
+        return self.interface.host
+
+    @property
     def name(self) -> str:
         """Return the device name."""
         if self._data:
