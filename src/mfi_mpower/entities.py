@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from . import device  # pylint: disable=unused-import
+from .interface import MPowerInterface
 from .exceptions import MPowerDataError
 
 
@@ -38,6 +39,11 @@ class MPowerEntity:
         keys = ["port", "label"]
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
         return f"{__class__.__name__}({name}, {vals})"
+
+    @property
+    def interface(self) -> MPowerInterface:
+        """Return the device interface."""
+        return self.device.interface
 
     async def update(self) -> None:
         """Update entity data from device data."""
@@ -81,7 +87,7 @@ class MPowerEntity:
 
     async def set_lock(self, locked: bool, refresh: bool = True) -> None:
         """Set lock state to on/off."""
-        await self.device.interface.set_port_lock(self.port, locked)
+        await self.interface.set_port_lock(self.port, locked)
         if refresh:
             await self.update()
 
@@ -141,7 +147,7 @@ class MPowerSwitch(MPowerEntity):
 
     async def set_output(self, output: bool, refresh: bool = True) -> None:
         """Set output to on/off."""
-        await self.device.interface.set_port_output(self.port, output)
+        await self.interface.set_port_output(self.port, output)
         if refresh:
             await self.update()
 

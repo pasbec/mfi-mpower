@@ -44,6 +44,10 @@ class MPowerDevice:
                 "ipaddr",
                 "iface",
                 "led",
+                # "hwaddrs",
+                # "hostname",
+                # "unique_id",
+                # "description",
             ]
         else:
             keys = ["host"]
@@ -86,6 +90,21 @@ class MPowerDevice:
         self._data = value
 
     @property
+    def board_data(self) -> str:
+        """Return the device board data."""
+        return self.data["board"]
+
+    @property
+    def status_data(self) -> str:
+        """Return the device status data."""
+        return self.data["status"]
+
+    @property
+    def port_data(self) -> dict:
+        """Return port data."""
+        return self.data["ports"]
+
+    @property
     def manufacturer(self) -> str:
         """Return the device manufacturer."""
         return "Ubiquiti"
@@ -93,45 +112,44 @@ class MPowerDevice:
     @property
     def hostname(self) -> str:
         """Return the device host name."""
-        return self.data["status"]["hostname"]
+        return self.status_data["hostname"]
     
     @property
     def iface(self) -> MPowerIface: 
         """Return the device network interface."""
-        return self.data["status"]["iface"]
+        return self.status_data["iface"]
 
     @property
     def ipaddr(self) -> str:
         """Return the device IP address."""
-        return self.data["status"]["ipaddr"]
+        return self.status_data["ipaddr"]
 
     @property
     def hwaddr(self) -> str:
         """Return the hardware address for the active network interface."""
-        return self.data["board"]["hwaddrs"][self.iface.name.lower()]
+        return self.board_data["hwaddrs"][self.iface.name.lower()]
 
     @property
     def hwaddrs(self) -> list[str]:
         """Return all hardware addresses."""
-        return self.data["board"]["hwaddrs"]
+        return self.board_data["hwaddrs"]
 
     @property
     def sw_version(self) -> str:
         """Return the device firmware version."""
-        status = self.data["status"]
-        version = status["firmware_version"]
-        build = status["firmware_build"]
+        version = self.status_data["firmware_version"]
+        build = self.status_data["firmware_build"]
         return f"{version} (build {build})"
 
     @property
     def hw_version(self) -> str:
         """Return the device hardware revision."""
-        return self.data["board"]["revision"]
+        return self.board_data["revision"]
 
     @property
     def eu_model(self) -> bool | None:
         """Return whether this device is a EU model with type F sockets."""
-        shortname = self.data["board"]["shortname"]
+        shortname = self.board_data["shortname"]
         if len(shortname) > 2 and shortname.endswith("E"):
             return True
         elif len(shortname) > 1:
@@ -141,7 +159,7 @@ class MPowerDevice:
     @property
     def model(self) -> str:
         """Return if the model."""
-        name = self.data["board"]["name"]
+        name = self.board_data["name"]
         eu_tag = " (EU)" if self.eu_model else ""
         if name:
             return f"mFi {name}{eu_tag}"
@@ -150,12 +168,12 @@ class MPowerDevice:
     @property
     def model_id(self) -> str:
         """Return if the model id."""
-        return self.data["board"]["sysid"]
+        return self.board_data["sysid"]
 
     @property
     def led(self) -> MPowerLED:
         """Return if the led status."""
-        return self.data["status"]["led"]
+        return self.status_data["led"]
 
     async def set_led(self, led: MPowerLED, refresh: bool = True) -> None:
         """Set LED state to on/off."""
@@ -166,12 +184,7 @@ class MPowerDevice:
     @property
     def ports(self) -> int:
         """Return the number of available ports."""
-        return self.data["board"]["ports"]
-
-    @property
-    def port_data(self) -> dict:
-        """Return port data."""
-        return self._data["ports"]
+        return self.board_data["ports"]
 
     @property
     def description(self) -> str:
@@ -190,8 +203,10 @@ class MPowerDevice:
     @property
     def unique_id(self) -> str:
         """Return a unique device id from combined LAN/WLAN hardware addresses."""
-        board = self.data["board"]
-        return f"{board['hwaddr_lan']}-{board['hwaddr_wlan']}"
+        hwaddrs = self.hwaddrs
+        lan = MPowerIface.LAN.name.lower()
+        wlan = MPowerIface.WLAN.name.lower()
+        return f"{hwaddrs[lan]}-{hwaddrs[wlan]}"
 
     async def create_sensor(self, port: int) -> MPowerSensor:
         """Create a single sensor."""
