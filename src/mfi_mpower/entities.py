@@ -46,8 +46,13 @@ class MPowerEntity:
 
     @property
     def data(self) -> dict:
-        """Return all entity data."""
+        """Return entity data."""
         return self._data
+
+    @data.setter
+    def data(self, value: dict) -> None:
+        """Set entity data."""
+        self._data = value
     
     @property
     def unique_id(self) -> str:

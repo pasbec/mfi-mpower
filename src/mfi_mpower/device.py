@@ -80,6 +80,11 @@ class MPowerDevice:
             )
         return self._data
 
+    @data.setter
+    def data(self, value: dict) -> None:
+        """Set device data."""
+        self._data = value
+
     @property
     def manufacturer(self) -> str:
         """Return the device manufacturer."""
@@ -177,7 +182,7 @@ class MPowerDevice:
     @property
     def unique_id(self) -> str:
         """Return a unique device id from combined LAN/WLAN hardware addresses."""
-        return f"{self.data['hwaddr']['lan']}-{self.data['hwaddr']['wlan']}"
+        return f"{self.data['board']['hwaddr_lan']}-{self.data['board']['hwaddr_wlan']}"
 
     async def create_sensor(self, port: int) -> MPowerSensor:
         """Create a single sensor."""
