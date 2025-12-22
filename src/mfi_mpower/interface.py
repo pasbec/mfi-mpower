@@ -26,6 +26,24 @@ class MPowerLED(Enum):
         return self.name
 
 
+class MPowerIface(Enum):
+    """mFi mPower network interface representation."""
+
+    LAN = 0
+    WLAN = 1
+
+    @classmethod
+    def from_dev(cls, s: str) -> "MPowerIface":
+        s = s.lower()
+        if s.startswith("eth"):
+            return cls.LAN
+        else:
+            return cls.WLAN
+
+    def __str__(self):
+        return self.name
+
+
 class MPowerCat(ABC):
     """mFi mPower cat interface base."""
 
@@ -45,6 +63,14 @@ class MPowerCat(ABC):
     def specs(self) -> dict:
         """Return the specs."""
         pass
+
+    def cast(self, value: str, to: type) -> Any:
+        if value is None:
+            return None
+        try:
+            return to(value)
+        except (ValueError, TypeError):
+            return None
 
     def keys(self) -> KeysView:
         """Return the keys."""
@@ -105,7 +131,7 @@ class MPowerCatBoard(MPowerCat):
             for value in values
             if (match := re.match(r"^board.(\w+)=(.*)", value))
         }
-        data["ports"] = int(self.PORTS[data["sysid"].lower()])
+        data["ports"] = int(self.PORTS.get(data["sysid"].lower(), 0))
         hwaddr = data.pop("hwaddr")
         data["hwaddr"] = ':'.join(hwaddr[i:i+2] for i in range(0, 12, 2))
         return data
@@ -113,9 +139,11 @@ class MPowerCatBoard(MPowerCat):
     def func_ifconfig(self, values: list[str]) -> dict[str, str]:
         """Extract hardware addresses from ifconfig output."""
         data = {
-            "hwaddr_lan" if match.group(1).startswith("eth") else "hwaddr_wlan": match.group(2)
-            for value in values
-            if (match := re.match(r"^([a-zA-Z0-9]+).*?HWaddr ([0-9A-Fa-f:]{17})", value))
+            "hwaddrs": {
+                MPowerIface.from_dev(match.group(1)).name.lower(): match.group(2)
+                for value in values
+                if (match := re.match(r"^([a-zA-Z0-9]+).*?HWaddr ([0-9A-Fa-f:]{17})", value))
+            }
         }
         return data
     
@@ -142,7 +170,8 @@ class MPowerCatStatus(MPowerCat):
 
     def func_led_status(self, values: list[str]) -> MPowerLED:
         """Unwrap value and convert to LED status enum type."""
-        return MPowerLED(int(values[0].split()[0]))
+        status = self.cast(values[0].split()[0], int)
+        return None if status is None else MPowerLED(status)
     
     def func_ip_route(self, values: list[str]) -> dict[str, str]:
         """Extract network interface and IP address from 'ip route' output."""
@@ -156,7 +185,7 @@ class MPowerCatStatus(MPowerCat):
             for value in values
             if (match := re.search(fr"dev {data.get('iface')}.*src (\d+\.\d+\.\d+\.\d+)", value))
         })
-        data["iface"] = "lan" if data["iface"].startswith("eth") else "wlan"
+        data["iface"] = MPowerIface.from_dev(data["iface"])
         return data
     
     @property
@@ -230,13 +259,13 @@ class MPowerCatPortSensors(MPowerCatPort):
 
     dir = "/proc/power"
 
-    def func_float(self, values: list[str]) -> list[float]:
+    def func_float(self, values: list[str]) -> list[float | None]:
         """Convert float readings."""
-        return [float(value) for value in values]
+        return [self.cast(value, float) for value in values]
 
-    def func_bool(self, values: list[str]) -> list[bool]:
+    def func_bool(self, values: list[str]) -> list[bool | None]:
         """Convert boolean readings."""
-        return [bool(int(value)) for value in values]
+        return [self.cast(self.cast(value, int), bool) for value in values]
     
     @property
     def specs(self):
@@ -267,20 +296,6 @@ class MPowerInterface:
     ) -> None:
         """Initialize the interface."""
         self.session = MPowerSession(host, username, password)
-
-    @staticmethod
-    def value(
-        string: str,
-        read: Callable | None = None,
-        cast: type | Callable | None = None
-    ) -> Any:
-        """Cast a value to a specific type."""
-        if cast is None:
-            cast = str
-        try:
-            return cast((string if read is None else read(string)).strip())
-        except ValueError:
-            return None
 
     @property
     def host(self) -> None:
@@ -347,3 +362,20 @@ class MPowerInterface:
             print("data", "=", json.dumps(data, indent=2, default=str))
 
         return data
+
+    async def set_proc(self, proc: str, value: Any) -> None:
+        """Set state via file."""
+        await self.run(f"echo {value} > /proc/{proc}")
+
+    async def set_led(self, led: MPowerLED) -> None:
+        """Set LED state to the given LED value."""
+        await self.set_proc("led/status", MPowerLED.OFF.value)
+        await self.set_proc("led/status", led.value)
+
+    async def set_port_lock(self, port: int, lock: bool) -> None:
+        """Set port lock state to on/off."""
+        await self.set_proc(f"power/lock{port}", int(lock))
+
+    async def set_port_output(self, port: int, output: bool) -> None:
+        """Set port output state to on/off."""
+        await self.set_proc(f"power/output{port}", int(output))

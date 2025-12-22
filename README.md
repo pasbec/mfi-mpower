@@ -24,9 +24,21 @@ async def main():
     }
 
     async with MPowerDevice(**data) as device:
+        
+        # Test LED control
+        await device.set_led(MPowerLED.YELLOW)
+        await asyncio.sleep(5)
+        await device.set_led(MPowerLED.LOCKED_OFF)
 
-        # Turn port 1 off and toggle it afterwards back on
+        # Create switch for port 1
         switch = await device.create_switch(1)
+
+        # Test lock control
+        await switch.lock()
+        await asyncio.sleep(5)
+        await switch.unlock()
+
+        # Test output control
         await switch.turn_off()
         await asyncio.sleep(5)
         await switch.toggle()

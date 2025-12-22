@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .entities import MPowerSensor, MPowerSwitch
 from .exceptions import MPowerDataError
-from .interface import MPowerLED, MPowerInterface
+from .interface import MPowerLED, MPowerIface, MPowerInterface
 
 
 class MPowerDevice:
@@ -59,8 +59,8 @@ class MPowerDevice:
     def name(self) -> str:
         """Return the device name."""
         if self._data:
-            return self._data.get("hostname", self.interface.host)
-        return self.interface.host
+            return self._data.get("hostname", self.host)
+        return self.host
 
     async def update(self) -> None:
         """Update sensor data."""
@@ -96,9 +96,9 @@ class MPowerDevice:
         return self.data["status"]["hostname"]
     
     @property
-    def iface(self) -> str: 
+    def iface(self) -> MPowerIface: 
         """Return the device network interface."""
-        return self.data["status"]["iface"].upper()
+        return self.data["status"]["iface"]
 
     @property
     def ipaddr(self) -> str:
@@ -107,8 +107,13 @@ class MPowerDevice:
 
     @property
     def hwaddr(self) -> str:
-        """Return the main device hardware address."""
-        return self.data["board"]["hwaddr"]
+        """Return the hardware address for the active network interface."""
+        return self.data["board"]["hwaddrs"][self.iface.name.lower()]
+
+    @property
+    def hwaddrs(self) -> list[str]:
+        """Return all hardware addresses."""
+        return self.data["board"]["hwaddrs"]
 
     @property
     def sw_version(self) -> str:
@@ -154,9 +159,7 @@ class MPowerDevice:
 
     async def set_led(self, led: MPowerLED, refresh: bool = True) -> None:
         """Set LED state to on/off."""
-        if self.led == MPowerLED.LOCKED_OFF:
-            await self.interface.run(f"echo {MPowerLED.OFF.value} > /proc/led/status")
-        await self.interface.run(f"echo {led.value} > /proc/led/status")
+        await self.interface.set_led(led)
         if refresh:
             await self.update()
 
@@ -164,6 +167,11 @@ class MPowerDevice:
     def ports(self) -> int:
         """Return the number of available ports."""
         return self.data["board"]["ports"]
+
+    @property
+    def port_data(self) -> dict:
+        """Return port data."""
+        return self._data["ports"]
 
     @property
     def description(self) -> str:
@@ -182,7 +190,8 @@ class MPowerDevice:
     @property
     def unique_id(self) -> str:
         """Return a unique device id from combined LAN/WLAN hardware addresses."""
-        return f"{self.data['board']['hwaddr_lan']}-{self.data['board']['hwaddr_wlan']}"
+        board = self.data["board"]
+        return f"{board['hwaddr_lan']}-{board['hwaddr_wlan']}"
 
     async def create_sensor(self, port: int) -> MPowerSensor:
         """Create a single sensor."""

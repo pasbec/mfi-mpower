@@ -21,7 +21,7 @@ class MPowerEntity:
         if not device.updated:
             raise MPowerDataError(f"Device {device.name} must be updated first")
 
-        self._data = device.data["ports"][self.port - 1]
+        self._data = device.port_data[self.port - 1]
 
         if port < 1:
             raise ValueError(
@@ -42,7 +42,7 @@ class MPowerEntity:
     async def update(self) -> None:
         """Update entity data from device data."""
         await self.device.update()
-        self._data = self.device.data["ports"][self.port - 1]
+        self._data = self.device.port_data[self.port - 1]
 
     @property
     def data(self) -> dict:
@@ -81,7 +81,7 @@ class MPowerEntity:
 
     async def set_lock(self, locked: bool, refresh: bool = True) -> None:
         """Set lock state to on/off."""
-        await self.device.interface.run(f"echo {int(locked)} > /proc/power/lock{self.port}")
+        await self.device.interface.set_port_lock(self.port, locked)
         if refresh:
             await self.update()
 
@@ -141,7 +141,7 @@ class MPowerSwitch(MPowerEntity):
 
     async def set_output(self, output: bool, refresh: bool = True) -> None:
         """Set output to on/off."""
-        await self.device.interface.run(f"echo {int(output)} > /proc/power/output{self.port}")
+        await self.device.interface.set_port_output(self.port, output)
         if refresh:
             await self.update()
 
