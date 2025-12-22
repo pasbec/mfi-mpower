@@ -60,8 +60,9 @@ class MPowerCat(ABC):
 
     def command(self) -> str:
         """Return the cat command with ASCII Record Separator (0x1E) for file separation."""
-        commands = [c for v in self.specs.values() if (c := v.get("command", None))]
-        commands += [fr"cd /tmp && printf '\x1E' > _ && cat {' _ '.join(self.files())}"]
+        commands = ["cd /tmp"]
+        commands += [c for v in self.specs.values() if (c := v.get("command", None))]
+        commands += [r"printf '\x1E' > _",  fr"cat {' _ '.join(self.files())}"]
         return " && ".join(commands)
 
     def convert(self, key: str, values: list[str]) -> Any:
@@ -124,8 +125,8 @@ class MPowerCatBoard(MPowerCat):
         return {
             "info": {"file": "/etc/board.info", "func": self.func_info, "unwrap": True},
             "ifconfig": {
-                "file": "/tmp/ifconfig",
-                "command": "ifconfig -a > /tmp/ifconfig",
+                "file": "ifconfig",
+                "command": "ifconfig -a > ifconfig",
                 "func": self.func_ifconfig,
                 "unwrap": True
             },
@@ -167,8 +168,8 @@ class MPowerCatStatus(MPowerCat):
             "led": {"file": "/proc/led/status", "func": self.func_led_status},
             "hostname": {"file": "/proc/sys/kernel/hostname"},
             "ip_route": {
-                "file": "/tmp/ip_route",
-                "command": "ip route > /tmp/ip_route",
+                "file": "ip_route",
+                "command": "ip route > ip_route",
                 "func": self.func_ip_route,
                 "unwrap": True
             },
