@@ -1,10 +1,14 @@
 """Ubiquiti mFi MPower SSH session"""
+
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 import asyncssh
 
-from .exceptions import MPowerError
+from .exceptions import MPowerError, MPowerDataError
 
 
 class MPowerConnectionError(MPowerError):
@@ -62,8 +66,9 @@ class MPowerSession:
                 f"Login to device {self.host} failed due to wrong SSH credentials"
             ) from exc
         except (OSError, asyncssh.Error) as exc:
+            info = f"{type(exc).__name__}({exc})"
             raise MPowerConnectionError(
-                f"Connection to device {self.host} failed: {type(exc).__name__}({exc})"
+                f"Connection to device {self.host} failed: {info}"
             ) from exc
 
     async def close(self) -> None:
@@ -91,3 +96,15 @@ class MPowerSession:
                 f"Command '{command}' on device {self.host} failed with exit code {status}"
             )
         return process.stdout.strip()
+    
+    @asynccontextmanager
+    async def get(self, command) -> AsyncGenerator[str, None]:
+        """Run command over SSH and yield output in context manager."""
+        try:
+            output = await self.run(command)
+            yield output
+        except Exception as exc:
+            info = f"{type(exc).__name__}({exc})"
+            raise MPowerDataError(
+                f"Data processing for '{command}' on device {self.host} failed: {info}"
+            ) from exc

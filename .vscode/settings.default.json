@@ -15,6 +15,7 @@
     "cpurevision",
     "diffie",
     "hwaddr",
+    "hwaddrs",
     "isort",
     "mpower",
     "pasbec",

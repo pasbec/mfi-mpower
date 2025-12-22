@@ -1,4 +1,5 @@
 """Ubiquiti mFi MPower entities"""
+
 from __future__ import annotations
 
 from . import device  # pylint: disable=unused-import
@@ -56,26 +57,26 @@ class MPowerEntity:
     @property
     def label(self) -> str | None:
         """Return the entity label."""
-        return self.data.get("label")
+        return self.data.get("config", {}).get("label")
 
     @property
-    def output(self) -> bool:
+    def output(self) -> bool | None:
         """Return the current output state."""
-        return bool(self.data["output"])
+        return self.data.get("sensors", {}).get("output")
 
     @property
-    def relay(self) -> bool:
+    def relay(self) -> bool | None:
         """Return the initial output state which is applied after device boot."""
-        return bool(self.data["relay"])
+        return self.data.get("sensors", {}).get("relay")
 
     @property
-    def locked(self) -> bool:
+    def locked(self) -> bool | None:
         """Return the lock state which prevents switching if enabled."""
-        return bool(self.data["locked"])
+        return self.data.get("sensors", {}).get("locked")
 
     async def set_lock(self, locked: bool, refresh: bool = True) -> None:
         """Set lock state to on/off."""
-        await self.device.run(f"echo {int(locked)} > /proc/power/lock{self.port}")
+        await self.device.interface.run(f"echo {int(locked)} > /proc/power/lock{self.port}")
         if refresh:
             await self.update()
 
@@ -100,27 +101,27 @@ class MPowerSensor(MPowerEntity):
     @property
     def power(self) -> float | None:
         """Return the output power [W]."""
-        return self.data.get("power")
+        return self.data.get("sensors", {}).get("power")
 
     @property
     def current(self) -> float | None:
         """Return the output current [A]."""
-        return self.data.get("current")
+        return self.data.get("sensors", {}).get("current")
 
     @property
     def voltage(self) -> float | None:
         """Return the output voltage [V]."""
-        return self.data.get("voltage")
+        return self.data.get("sensors", {}).get("voltage")
 
     @property
     def powerfactor(self) -> float | None:
         """Return the output power factor ("real power" / "apparent power")."""
-        return self.data.get("powerfactor")
+        return self.data.get("sensors", {}).get("powerfactor")
 
     @property
     def energy(self) -> float | None:
         """Return the energy since last device boot [Wh]."""
-        return self.data.get("energy")
+        return self.data.get("sensors", {}).get("energy")
 
 
 class MPowerSwitch(MPowerEntity):
@@ -135,7 +136,7 @@ class MPowerSwitch(MPowerEntity):
 
     async def set_output(self, output: bool, refresh: bool = True) -> None:
         """Set output to on/off."""
-        await self.device.run(f"echo {int(output)} > /proc/power/output{self.port}")
+        await self.device.interface.run(f"echo {int(output)} > /proc/power/output{self.port}")
         if refresh:
             await self.update()
 

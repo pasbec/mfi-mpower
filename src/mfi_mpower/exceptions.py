@@ -1,4 +1,5 @@
 """Ubiquiti mFi MPower exceptions"""
+
 from __future__ import annotations
 
 
