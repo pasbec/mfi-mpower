@@ -7,4 +7,4 @@ from .exceptions import MPowerError, MPowerDataError
 from .interface import MPowerLED
 from .session import MPowerConnectionError, MPowerAuthenticationError, MPowerCommandError
 
-__version__ = "2.4.4"
+__version__ = "2.4.5"
