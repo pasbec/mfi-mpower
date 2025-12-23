@@ -26,6 +26,12 @@ class MPowerCommandError(MPowerError):
 class MPowerSession:
     """mFi mPower session representation."""
 
+    _host: str
+    _username: str
+    _password: str
+    _conn: asyncssh.SSHClientConnection | None
+    _lock: asyncio.Lock
+
     # NOTE: Ubiquiti mFi mPower Devices with firmware 2.1.11 use Dropbear SSH 0.51 (27 Mar 2008).
     options: dict = {
         "kex_algs": "diffie-hellman-group1-sha1",
@@ -43,11 +49,16 @@ class MPowerSession:
         password: str,
     ) -> None:
         """Initialize the session."""
-        self.host = host
-        self.username = username
-        self.password = password
-        self._conn: asyncssh.SSHClientConnection | None = None
+        self._host = host
+        self._username = username
+        self._password = password
+        self._conn = None
         self._lock = asyncio.Lock()
+
+    @property
+    def host(self) -> str:
+        """Return the host."""
+        return self._host
 
     async def connect(self) -> None:
         """Establish SSH connection."""
@@ -56,9 +67,9 @@ class MPowerSession:
             await self._conn.wait_closed()
         try:
             self._conn = await asyncssh.connect(
-                host=self.host,
-                username=self.username,
-                password=self.password,
+                host=self._host,
+                username=self._username,
+                password=self._password,
                 **self.options,
             )
         except asyncssh.PermissionDenied as exc:

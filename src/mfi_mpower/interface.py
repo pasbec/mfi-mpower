@@ -26,14 +26,14 @@ class MPowerLED(Enum):
         return self.name
 
 
-class MPowerIface(Enum):
+class MPowerNetwork(Enum):
     """mFi mPower network interface representation."""
 
     LAN = 0
     WLAN = 1
 
     @classmethod
-    def from_dev(cls, s: str) -> "MPowerIface":
+    def from_dev(cls, s: str) -> "MPowerNetwork":
         s = s.lower()
         if s.startswith("eth"):
             return cls.LAN
@@ -47,20 +47,38 @@ class MPowerIface(Enum):
 class MPowerCat(ABC):
     """mFi mPower cat interface base."""
 
-    dir: str | None = None
-    file: str | None = None
-    func: type | Callable = str
+    _session: MPowerSession
 
     def __init__(
         self,
         session: MPowerSession,
     ) -> None:
         """Initialize the cat interface."""
-        self.session = session
+        self._session = session
+
+    @property
+    def session(self) -> MPowerSession:
+        """Return the session."""
+        return self._session
+
+    @property
+    def dir(self) -> str | None:
+        """Return the default directory."""
+        return None
+
+    @property
+    def file(self) -> str | None:
+        """Return the default file."""
+        return None
+
+    @property
+    def func(self) -> type | Callable:
+        """Return the default conversion function."""
+        return str
 
     @property
     @abstractmethod
-    def specs(self) -> dict:
+    def specs(self) -> dict[str, dict[str, Any]]:
         """Return the specs."""
         pass
 
@@ -140,7 +158,7 @@ class MPowerCatBoard(MPowerCat):
         """Extract hardware addresses from ifconfig output."""
         data = {
             "hwaddrs": {
-                MPowerIface.from_dev(match.group(1)).name.lower(): match.group(2)
+                MPowerNetwork.from_dev(match.group(1)).name.lower(): match.group(2)
                 for value in values
                 if (match := re.match(r"^([a-zA-Z0-9]+).*?HWaddr ([0-9A-Fa-f:]{17})", value))
             }
@@ -148,7 +166,7 @@ class MPowerCatBoard(MPowerCat):
         return data
     
     @property
-    def specs(self):
+    def specs(self) -> dict[str, dict[str, Any]]:
         """Return the specs."""
         return {
             "info": {"file": "/etc/board.info", "func": self.func_info, "unwrap": True},
@@ -185,11 +203,11 @@ class MPowerCatStatus(MPowerCat):
             for value in values
             if (match := re.search(fr"dev {data.get('iface')}.*src (\d+\.\d+\.\d+\.\d+)", value))
         })
-        data["iface"] = MPowerIface.from_dev(data["iface"])
+        data["iface"] = MPowerNetwork.from_dev(data["iface"])
         return data
     
     @property
-    def specs(self):
+    def specs(self) -> dict[str, dict[str, Any]]:
         """Return the specs."""
         return {
             "firmware_version": {"file": "/usr/etc/.version"},
@@ -208,6 +226,8 @@ class MPowerCatStatus(MPowerCat):
 class MPowerCatPort(MPowerCat):
     """mFi mPower cat interface base for ports."""
 
+    _ports: int
+
     def __init__(
         self,
         session: MPowerSession,
@@ -215,13 +235,20 @@ class MPowerCatPort(MPowerCat):
     ) -> None:
         """Initialize the port cat processor."""
         super().__init__(session)
-        self.ports = ports
+        self._ports = ports
+
+    @property
+    def ports(self) -> int:
+        """Return the number of ports."""
+        return self._ports
 
 
 class MPowerCatPortConfig(MPowerCatPort):
     """mFi mPower cat interface for port config data."""
 
-    dir = "/etc/persistent/cfg"
+    @property
+    def dir(self) -> str:
+        return "/etc/persistent/cfg"
 
     def func_label(self, values: list[str]) -> list[str]:
         """Convert labels."""
@@ -246,7 +273,7 @@ class MPowerCatPortConfig(MPowerCatPort):
         return vpower
     
     @property
-    def specs(self):
+    def specs(self) -> dict[str, dict[str, Any]]:
         """Return the specs."""
         return {
             "label": {"file": "{dir}/config_file", "func": self.func_label},
@@ -257,7 +284,9 @@ class MPowerCatPortConfig(MPowerCatPort):
 class MPowerCatPortSensors(MPowerCatPort):
     """mFi mPower cat interface for port sensor data."""
 
-    dir = "/proc/power"
+    @property
+    def dir(self) -> str:
+        return "/proc/power"
 
     def func_float(self, values: list[str]) -> list[float | None]:
         """Convert float readings."""
@@ -268,7 +297,7 @@ class MPowerCatPortSensors(MPowerCatPort):
         return [self.cast(self.cast(value, int), bool) for value in values]
     
     @property
-    def specs(self):
+    def specs(self) -> dict[str, dict[str, Any]]:
         """Return the specs."""
         return {
             "energy": {"file": "{dir}/energy_sum*", "func": self.func_float},  # energy [Wh]
@@ -286,7 +315,8 @@ class MPowerCatPortSensors(MPowerCatPort):
 class MPowerInterface:
     """mFi mPower interface representation."""
 
-    _board: dict | None = None
+    _board: dict | None
+    _session: MPowerSession
 
     def __init__(
         self,
@@ -295,11 +325,17 @@ class MPowerInterface:
         password: str,
     ) -> None:
         """Initialize the interface."""
-        self.session = MPowerSession(host, username, password)
+        self._board = None
+        self._session = MPowerSession(host, username, password)
 
     @property
-    def host(self) -> None:
-        """Return session host."""
+    def session(self) -> MPowerSession:
+        """Return the session."""
+        return self._session
+
+    @property
+    def host(self) -> str:
+        """Return the session host."""
         return self.session.host
         
     async def connect(self) -> None:

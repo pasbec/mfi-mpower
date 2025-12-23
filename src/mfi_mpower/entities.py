@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import device  # pylint: disable=unused-import
+from . import device
 from .interface import MPowerInterface
 from .exceptions import MPowerDataError
 
@@ -10,60 +10,75 @@ from .exceptions import MPowerDataError
 class MPowerEntity:
     """mFi mPower entity representation."""
 
+    _data: dict
+    _device: device.MPowerDevice
+    _port: int
+
     def __init__(
         self,
-        device: device.MPowerDevice,  # pylint: disable=redefined-outer-name
+        device: device.MPowerDevice,
         port: int,
     ) -> None:
         """Initialize the entity."""
-        self.device = device
-        self.port = port
+        self._data = {}
+        self._device = device
+        self._port = port
+        self.update(device.data)
 
-        if not device.updated:
-            raise MPowerDataError(f"Device {device.name} must be updated first")
-
-        self._data = device.port_data[self.port - 1]
-
-        if port < 1:
-            raise ValueError(
-                f"Port number {port} for device {device.name} is too small: 1-{device.ports}"
-            )
-        if port > device.ports:
-            raise ValueError(
-                f"Port number {port} for device {device.name} is too large: 1-{device.ports}"
-            )
-
-    def __str__(self):
+    def __str__(self):  
         """Represent this entity as string."""
-        name = f"name={self.device.name}"
-        keys = ["port", "label"]
+        keys = ["name", "label"]
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
-        return f"{__class__.__name__}({name}, {vals})"
+        return f"{__class__.__name__}({vals})"
 
-    @property
-    def interface(self) -> MPowerInterface:
-        """Return the device interface."""
-        return self.device.interface
+    def update(self, data: dict) -> None:
+        """Update entity data from given **device data**."""
+        try:
+            self._data.update(data.get("ports", [])[self.port - 1])
+        except IndexError as exc:
+            raise MPowerDataError(
+                f"Device data for entity {self.name} is invalid"
+            ) from exc
 
-    async def update(self) -> None:
-        """Update entity data from device data."""
-        await self.device.update()
-        self._data = self.device.port_data[self.port - 1]
+    async def refresh(self) -> None:
+        """Refresh entity data from **device data**."""
+        await self.device.refresh()
+        self.update(self.device.data)
 
     @property
     def data(self) -> dict:
         """Return entity data."""
         return self._data
 
-    @data.setter
-    def data(self, value: dict) -> None:
-        """Set entity data."""
-        self._data = value
-    
     @property
-    def unique_id(self) -> str:
-        """Return unique entity id from unique device id and port."""
-        return f"{self.device.unique_id}-{self.port}"
+    def has_data(self) -> bool:
+        """Return whether the entity has data."""
+        return bool(self._data)
+
+    @property
+    def device(self) -> device.MPowerDevice:
+        """Return the entity device."""
+        return self._device
+
+    @property
+    def port(self) -> int:
+        """Return the entity port."""
+        return self._port
+
+    @property
+    def host(self) -> str:
+        """Return the entity host."""
+        return self.device.host
+
+    @property
+    def name(self) -> str:
+        """Return the device name."""
+        return f"{self.device.name}-{self.port}"
+
+    @property
+    def interface(self) -> MPowerInterface:
+        """Return the device interface."""
+        return self.device.interface
 
     @property
     def label(self) -> str | None:
@@ -89,7 +104,7 @@ class MPowerEntity:
         """Set lock state to on/off."""
         await self.interface.set_port_lock(self.port, locked)
         if refresh:
-            await self.update()
+            await self.refresh()
 
     async def lock(self, refresh: bool = True) -> None:
         """Lock output switch."""
@@ -104,10 +119,9 @@ class MPowerSensor(MPowerEntity):
 
     def __str__(self):
         """Represent this sensor as string."""
-        name = f"name={self.device.name}"
-        keys = ["port", "label", "power", "current", "voltage", "powerfactor", "energy"]
+        keys = ["name", "label", "power", "current", "voltage", "powerfactor", "energy"]
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
-        return f"{__class__.__name__}({name}, {vals})"
+        return f"{__class__.__name__}({vals})"
 
     @property
     def power(self) -> float | None:
@@ -140,16 +154,15 @@ class MPowerSwitch(MPowerEntity):
 
     def __str__(self):
         """Represent this switch as string."""
-        name = f"name={self.device.name}"
-        keys = ["port", "label", "output", "relay", "locked"]
+        keys = ["name", "label", "output", "relay", "locked"]
         vals = ", ".join([f"{k}={getattr(self, k)}" for k in keys])
-        return f"{__class__.__name__}({name}, {vals})"
+        return f"{__class__.__name__}({vals})"
 
     async def set_output(self, output: bool, refresh: bool = True) -> None:
         """Set output to on/off."""
         await self.interface.set_port_output(self.port, output)
         if refresh:
-            await self.update()
+            await self.refresh()
 
     async def turn_on(self, refresh: bool = True) -> None:
         """Turn output on."""
