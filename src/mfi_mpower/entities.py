@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from . import device
-from .interface import MPowerInterface
 from .exceptions import MPowerDataError
+from .interface import MPowerInterface
 
 
 class MPowerEntity:
@@ -171,6 +171,7 @@ class MPowerSwitch(MPowerEntity):
     async def turn_off(self, refresh: bool = True) -> None:
         """Turn output off."""
         await self.set_output(False, refresh=refresh)
+        
     async def toggle(self, refresh: bool = True) -> None:
         """Toggle output."""
         await self.set_output(not self.output, refresh=refresh)

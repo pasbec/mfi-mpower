@@ -9,3 +9,15 @@ class MPowerError(Exception):
 
 class MPowerDataError(MPowerError):
     """Error related to data validity and parsing."""
+
+
+class MPowerConnectionError(MPowerError):
+    """Error related to connections."""
+
+
+class MPowerAuthenticationError(MPowerError):
+    """Error related to authentication."""
+
+
+class MPowerCommandError(MPowerError):
+    """Error related to command execution."""

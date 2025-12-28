@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from .entities import MPowerSensor, MPowerSwitch
-from .interface import MPowerLED, MPowerNetwork, MPowerInterface
+from .enums import MPowerLED, MPowerNetwork
+from .interface import MPowerInterface
 
 
 class MPowerDevice:
@@ -68,7 +69,8 @@ class MPowerDevice:
 
     async def refresh(self) -> None:
         """Refresh device data."""
-        self._data.update(await self.interface.get_data())
+        data = await self.interface.get_data()
+        self._data.update(data)
 
     @property
     def data(self) -> dict[str, Any]:

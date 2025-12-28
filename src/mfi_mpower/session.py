@@ -8,19 +8,12 @@ from contextlib import asynccontextmanager
 
 import asyncssh
 
-from .exceptions import MPowerError, MPowerDataError
-
-
-class MPowerConnectionError(MPowerError):
-    """Error related to connections."""
-
-
-class MPowerAuthenticationError(MPowerError):
-    """Error related to authentication."""
-
-
-class MPowerCommandError(MPowerError):
-    """Error related to command execution."""
+from .exceptions import (
+    MPowerAuthenticationError,
+    MPowerConnectionError,
+    MPowerDataError,
+    MPowerCommandError,
+)
 
 
 class MPowerSession:
@@ -106,7 +99,7 @@ class MPowerSession:
             raise MPowerCommandError(
                 f"Command '{command}' on device {self.host} failed with exit code {status}"
             )
-        return process.stdout.strip()
+        return process.stdout
     
     @asynccontextmanager
     async def get(self, command) -> AsyncGenerator[str, None]:
