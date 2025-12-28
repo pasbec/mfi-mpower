@@ -124,6 +124,6 @@ class MPowerInterface:
         """Set port output state to on/off."""
         await self.set_proc(f"power/output{port}", int(output))
 
-    async def reboot(self, port: int) -> None:
+    async def reboot(self) -> None:
         """Reboot the device."""
         await self.run("reboot")
