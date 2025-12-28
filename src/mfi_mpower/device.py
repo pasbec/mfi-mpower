@@ -238,7 +238,6 @@ class MPowerDevice:
             await self.refresh()
         return [MPowerSwitch(self, i + 1) for i in range(self.ports)]
 
-    @property
     def reboot(self) -> None:
         """Reboot the device."""
         return self.interface.reboot()
