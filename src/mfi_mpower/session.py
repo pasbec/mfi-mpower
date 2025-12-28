@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any, Awaitable, Callable
 
 import asyncssh
 
@@ -16,6 +17,9 @@ from .exceptions import (
 )
 
 
+MPowerSessionCallback = Callable[[], Any] | Callable[[], Awaitable[Any]]
+
+
 class MPowerSession:
     """mFi mPower session representation."""
 
@@ -24,6 +28,7 @@ class MPowerSession:
     _password: str
     _conn: asyncssh.SSHClientConnection | None
     _lock: asyncio.Lock
+    _callbacks: dict[str, set[MPowerSessionCallback]]
 
     # NOTE: Ubiquiti mFi mPower Devices with firmware 2.1.11 use Dropbear SSH 0.51 (27 Mar 2008).
     options: dict = {
@@ -47,11 +52,21 @@ class MPowerSession:
         self._password = password
         self._conn = None
         self._lock = asyncio.Lock()
+        self._callbacks = {}
 
     @property
     def host(self) -> str:
-        """Return the host."""
+        """Return the session host."""
         return self._host
+
+    @property
+    def callbacks(self) -> dict[str, set[MPowerSessionCallback]]:
+        """Return the session callbacks."""
+        return self._callbacks
+
+    def add_callback(self, key: str, callback: MPowerSessionCallback) -> None:
+        """Add a session callback."""
+        self._callbacks.setdefault(key, set()).add(callback)
 
     async def connect(self) -> None:
         """Establish SSH connection."""
@@ -74,6 +89,12 @@ class MPowerSession:
             raise MPowerConnectionError(
                 f"Connection to device {self.host} failed: {info}"
             ) from exc
+        else:
+            for callback in self.callbacks.get("connect", set()):
+                if asyncio.iscoroutinefunction(callback):
+                    await callback()
+                else:
+                    callback()
 
     async def close(self) -> None:
         """Close SSH connection."""
@@ -81,6 +102,11 @@ class MPowerSession:
             self._conn.close()
             await self._conn.wait_closed()
             self._conn = None
+            for callback in self.callbacks.get("close", set()):
+                if asyncio.iscoroutinefunction(callback):
+                    await callback()
+                else:
+                    callback()
 
     @property
     async def connection(self) -> asyncssh.SSHClientConnection:
@@ -88,6 +114,11 @@ class MPowerSession:
         async with self._lock:
             if self._conn is None or self._conn.is_closed():
                 await self.connect()
+                for callback in self.callbacks.get("reconnect", set()):
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback()
+                    else:
+                        callback()
             return self._conn
 
     async def run(self, command: str) -> str:
@@ -99,6 +130,11 @@ class MPowerSession:
             raise MPowerCommandError(
                 f"Command '{command}' on device {self.host} failed with exit code {status}"
             )
+        for callback in self.callbacks.get("run", set()):
+            if asyncio.iscoroutinefunction(callback):
+                await callback()
+            else:
+                callback()
         return process.stdout
     
     @asynccontextmanager

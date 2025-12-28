@@ -58,10 +58,16 @@ class MPowerInterface:
         """Get (stored) board info."""
         if self._board is None:
             self._board = await MPowerBoardParser(self.session).get_data()
+            self.session.add_callback("reconnect", self.reset_board)
         return self._board
+    
+    def reset_board(self):
+        """Reset stored board info."""
+        self._board = None
 
     async def get_status_info(self) -> dict:
         """Get device status information."""
+        await self.get_board()  # Ensure board info is loaded
         return await MPowerStatusParser(self.session).get_data()
 
     async def get_ports(self) -> int:
@@ -97,10 +103,8 @@ class MPowerInterface:
             "status": await self.get_status_info(),
             "ports": await self.get_port_data(),
         }
-        
         if debug:
             print("data", "=", json.dumps(data, indent=2, default=str))
-
         return data
 
     async def set_proc(self, proc: str, value: Any) -> None:
@@ -119,3 +123,7 @@ class MPowerInterface:
     async def set_port_output(self, port: int, output: bool) -> None:
         """Set port output state to on/off."""
         await self.set_proc(f"power/output{port}", int(output))
+
+    async def reboot(self, port: int) -> None:
+        """Reboot the device."""
+        await self.run("reboot")
